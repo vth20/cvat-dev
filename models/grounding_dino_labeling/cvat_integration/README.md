@@ -59,7 +59,8 @@ docker logs nuclio-nuclio-custom-grounding-dino-window
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install "cvat-cli==2.76.*" torch torchvision "transformers>=4.40,<=4.44.2" timm
+pip install "cvat-cli==<phiên bản CVAT server>"   # vd: cvat-cli==2.76.*
+pip install torch torchvision "transformers>=4.40,<=4.44.2" timm
 export CVAT_ACCESS_TOKEN=<token>   # CVAT → Settings → Access tokens
 
 cvat-cli --server-host http://<cvat-host>:8080 task auto-annotate <TASK_ID> \

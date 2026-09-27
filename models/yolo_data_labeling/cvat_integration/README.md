@@ -51,7 +51,8 @@ docker logs nuclio-nuclio-custom-yolo-window
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install "cvat-cli==2.76.*" ultralytics torch torchvision
+pip install "cvat-cli==<phiên bản CVAT server>"   # vd: cvat-cli==2.76.*
+pip install ultralytics torch torchvision
 export CVAT_ACCESS_TOKEN=<token>   # CVAT → Settings → Access tokens
 
 cvat-cli --server-host http://<cvat-host>:8080 task auto-annotate <TASK_ID> \

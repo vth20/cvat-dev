@@ -1,6 +1,6 @@
 # CVAT + AI auto-annotation (window detection)
 
-CVAT Community v2.76.0 kèm 2 model tự động gán nhãn cửa sổ, chạy dưới dạng Nuclio function:
+CVAT Community (hiện tại v2.76.0, xem submodule `cvat/`) kèm 2 model tự động gán nhãn cửa sổ, chạy dưới dạng Nuclio function:
 
 | Model | Tên trong CVAT | Port |
 | ----- | -------------- | ---- |
@@ -11,13 +11,14 @@ CVAT Community v2.76.0 kèm 2 model tự động gán nhãn cửa sổ, chạy d
 
 ```text
 .
-├── cvat/                     # submodule: github.com/cvat-ai/cvat @ v2.76.0 (không sửa)
+├── cvat/                     # submodule: github.com/cvat-ai/cvat, ghim theo commit (không sửa)
 ├── models/
 │   ├── yolo_data_labeling/       # notebook train, model .pt, cvat_integration/
 │   └── grounding_dino_labeling/  # inference, gradio app, cvat_integration/
 ├── scripts/
 │   ├── cvat.sh               # docker compose CVAT + serverless
-│   └── deploy_models.sh      # build & deploy tất cả Nuclio function
+│   ├── deploy_models.sh      # build & deploy tất cả Nuclio function
+│   └── upgrade_cvat.sh       # nâng cấp CVAT trên server (backup + migrate + deploy lại model)
 └── .env.example
 ```
 
@@ -48,15 +49,51 @@ chọn **AI Tools → Detectors**.
 
 Nếu clone thiếu `--recurse-submodules`, `./scripts/cvat.sh` sẽ tự tải submodule.
 
-## Cập nhật
+## Cập nhật model / code AI
 
 ```bash
 git pull
-git submodule update --init --depth 1
 ./scripts/deploy_models.sh    # build lại model (có cache, nhanh hơn lần đầu)
 ```
 
 Đổi model YOLO: `models/yolo_data_labeling/cvat_integration/deploy_nuclio.sh Yolo/model/<file>.pt`.
+
+## Nâng cấp CVAT
+
+Phiên bản CVAT = commit của submodule `cvat/`. Image Docker lấy theo phiên bản ghi trong
+`cvat/docker-compose.yml`, nên không đặt `CVAT_VERSION` trong `.env` (trừ khi cố ý ghim).
+
+**1. Trên máy dev: nâng submodule rồi commit**
+
+```bash
+git -C cvat fetch --depth 1 origin tag v2.77.0     # thay bằng tag muốn lên
+git -C cvat checkout v2.77.0
+git add cvat
+git commit -m "Upgrade CVAT to v2.77.0"
+git push
+```
+
+Trước khi push nên:
+- Đọc `cvat/CHANGELOG.md` và mục phiên bản tương ứng trong
+  [upgrade guide](https://docs.cvat.ai/docs/administration/community/advanced/upgrade_guide/).
+- Xem `cvat/components/serverless/docker-compose.serverless.yml` có đổi version Nuclio không
+  (script deploy tự tải `nuctl` khớp version, chỉ cần deploy lại model).
+- Nếu dùng `cvat-cli task auto-annotate`: cài `cvat-cli` cùng phiên bản với server.
+
+**2. Trên server**
+
+```bash
+git pull
+./scripts/upgrade_cvat.sh
+```
+
+Script sẽ: backup DB + data + events vào `backups/<thời gian>/` → cập nhật submodule →
+pull image mới → khởi động (CVAT tự migrate DB, **không tắt giữa chừng**) → chờ CVAT sẵn sàng →
+deploy lại 2 model.
+
+Quay lại bản cũ khi lỗi: `git checkout <commit cũ> && git submodule update --init --depth 1`,
+khôi phục backup theo [backup guide](https://docs.cvat.ai/docs/administration/community/advanced/backup_guide/)
+(DB đã migrate lên schema mới không dùng được với bản cũ), rồi `./scripts/cvat.sh up -d`.
 
 ## Xử lý lỗi
 
