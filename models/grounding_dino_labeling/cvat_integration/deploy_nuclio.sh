@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build & deploy Nuclio function "Grounding DINO Window" lên CVAT. Chạy trên máy đang chạy CVAT.
 #
-#   ./cvat_integration/deploy_nuclio.sh                 # tự chọn GPU nếu có nvidia-smi, không thì CPU
+#   ./cvat_integration/deploy_nuclio.sh                 # tự chọn GPU nếu có GPU + NVIDIA Container Toolkit, không thì CPU
 #   ./cvat_integration/deploy_nuclio.sh --cpu
 #
 # Trọng số IDEA-Research/grounding-dino-base được tải vào image lúc build.
@@ -30,12 +30,19 @@ done
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+has_gpu() { command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; }
+# Docker phải được cấu hình NVIDIA Container Toolkit thì container mới dùng được GPU
+docker_has_gpu() { docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia; }
+
 if [ "$MODE" = auto ]; then
-    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+    if has_gpu && docker_has_gpu; then
         MODE=gpu
     else
+        has_gpu && echo "WARN: Có GPU nhưng Docker chưa cấu hình NVIDIA Container Toolkit -> dùng CPU" >&2
         MODE=cpu
     fi
+elif [ "$MODE" = gpu ]; then
+    docker_has_gpu || die "Docker chưa cấu hình NVIDIA Container Toolkit (không có runtime 'nvidia' trong 'docker info')"
 fi
 if [ "$MODE" = gpu ]; then
     FUNC_YAML="$SCRIPT_DIR/nuclio/function-gpu.yaml"
@@ -89,3 +96,26 @@ echo "Deploy Grounding DINO Window ($MODE)..."
     --platform-config "{\"attributes\": {\"network\": \"$CVAT_NETWORK\"}}"
 
 "$NUCTL" get function --platform local
+
+# --- Kiểm tra function thực sự chạy được (CVAT cần function ở trạng thái ready và có port) ---
+FUNC_NAME=custom-grounding-dino-window
+CONTAINER="nuclio-nuclio-$FUNC_NAME"
+# Ảnh PNG trắng 64x64
+SMOKE_IMAGE="iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PMQ0AAAwDoPo33UrYvQQckD4XAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAYHLAMpT0sIcNbcEAAAAAElFTkSuQmCC"
+
+"$NUCTL" get function "$FUNC_NAME" --platform local | grep -w ready >/dev/null \
+    || die "Function $FUNC_NAME không ở trạng thái ready. Xem: docker logs --tail 100 $CONTAINER"
+PORT="$(docker port "$CONTAINER" 8080/tcp 2>/dev/null | head -1 | sed 's/.*://')"
+[ -n "$PORT" ] || die "Container $CONTAINER không chạy. Xem: docker logs --tail 100 $CONTAINER"
+
+# Nuclio báo ready trước khi model load xong -> thử lại tối đa ~5 phút
+echo "Gọi thử function ở port $PORT..."
+for _ in $(seq 1 30); do
+    if curl -sf -m 300 -X POST "http://localhost:$PORT" -H 'Content-Type: application/json' \
+        -d "{\"image\": \"$SMOKE_IMAGE\"}" >/dev/null 2>&1; then
+        echo "OK: $FUNC_NAME hoạt động (port $PORT)."
+        exit 0
+    fi
+    sleep 10
+done
+die "Gọi thử function lỗi. Xem: docker logs --tail 100 $CONTAINER"

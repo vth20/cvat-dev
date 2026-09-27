@@ -101,6 +101,7 @@ khôi phục backup theo [backup guide](https://docs.cvat.ai/docs/administration
 | ---------- | ------------------------ |
 | Menu **Models** không hiện | Trang được mở khi server chưa sẵn sàng → tải lại trang. Kiểm tra `docker ps` có container `nuclio`. |
 | Automatic annotation báo `RemoteDisconnected` / `Connection aborted` | Function bị kill, thường do thiếu RAM. Xem `docker logs nuclio-nuclio-custom-grounding-dino-window` có `signal: killed`. |
+| Automatic annotation báo `http://host.docker.internal:None` | Function không ở trạng thái ready (build lỗi, container không khởi động, thiếu NVIDIA Container Toolkit khi dùng GPU). Chạy lại `./scripts/deploy_models.sh` và đọc lỗi; xem `docker logs --tail 100 nuclio-nuclio-<tên function>`. |
 | Deploy báo không có network `cvat_cvat` | Đặt `CVAT_NETWORK` trong `.env` theo `docker network ls`. |
 | Port 32101/32102 bị trùng | Đổi `triggers.myHttpTrigger.attributes.port` trong `function.yaml` và `function-gpu.yaml` của model đó. |
 
