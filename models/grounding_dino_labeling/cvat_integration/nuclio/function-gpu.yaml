@@ -1,0 +1,88 @@
+metadata:
+  name: custom-grounding-dino-window
+  namespace: cvat
+  annotations:
+    name: Grounding DINO Window (pretrained)
+    type: detector
+    # Phải khớp với biến môi trường LABELS bên dưới
+    spec: |
+      [
+        { "id": 0, "name": "window", "type": "rectangle" }
+      ]
+
+spec:
+  description: Grounding DINO base zero-shot window detection (GPU)
+  runtime: 'python:3.10'
+  handler: main:handler
+  eventTimeout: 60s
+  env:
+    - name: LABELS
+      value: window
+    - name: TEXT_THRESHOLD
+      value: "0.20"
+    - name: NMS_IOU
+      value: "0.45"
+    - name: HF_HOME
+      value: /opt/hf_cache
+    - name: HF_HUB_OFFLINE
+      value: "1"
+    - name: TRANSFORMERS_OFFLINE
+      value: "1"
+
+  build:
+    image: cvat.custom.grounding-dino-window:latest-gpu
+    baseImage: ubuntu:22.04
+
+    directives:
+      preCopy:
+        - kind: ENV
+          value: DEBIAN_FRONTEND=noninteractive
+        - kind: ENV
+          value: NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        - kind: RUN
+          value: |-
+            apt-get update \
+            && apt-get install -y --no-install-recommends \
+              python3 python3-pip python-is-python3 libgl1 libglib2.0-0 \
+            && rm -rf /var/lib/apt/lists/*
+        - kind: RUN
+          value: |-
+            pip install --no-cache-dir torch==2.5.1 torchvision==0.20.1 \
+              --index-url https://download.pytorch.org/whl/cu121
+        - kind: RUN
+          value: pip install --no-cache-dir transformers==4.44.2 "numpy<2" pillow timm
+        # Tải sẵn trọng số vào image để function khởi động không cần internet
+        - kind: ENV
+          value: HF_HOME=/opt/hf_cache
+        - kind: RUN
+          value: |-
+            python -c "from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection as M; \
+            AutoProcessor.from_pretrained('IDEA-Research/grounding-dino-base'); \
+            M.from_pretrained('IDEA-Research/grounding-dino-base')"
+        # Nuclio chỉ đóng gói sẵn wheel msgpack cho x86_64; tải bản đúng kiến trúc để build được cả trên ARM
+        - kind: RUN
+          value: |-
+            pip download --no-cache-dir --only-binary=:all: -d /opt/nuclio/whl msgpack==1.1.0
+        - kind: WORKDIR
+          value: /opt/nuclio
+
+  triggers:
+    myHttpTrigger:
+      numWorkers: 1
+      kind: 'http'
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432 # 32MB
+        # Cố định host port: nếu container restart (vd bị OOM) CVAT vẫn gọi đúng port
+        port: 32102
+
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume

@@ -1,0 +1,6 @@
+.DS_Store
+.env
+
+# Repo AI cũ và dữ liệu local, không đưa vào repo
+/AI/
+/dataset/

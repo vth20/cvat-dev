@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.gradio/
+gradio_exports/
+.DS_Store
+
+# Bỏ qua model nặng (sẽ tự động tải từ Hugging Face khi chạy)
+saved_model/
+
+# Bỏ qua dataset demo nếu không cần thiết
+Window_detection_a.yolov11/
+
+# nuctl tải tự động bởi cvat_integration/deploy_nuclio.sh
+cvat_integration/.bin/

@@ -1,0 +1,4 @@
+[submodule "cvat"]
+	path = cvat
+	url = https://github.com/cvat-ai/cvat.git
+	shallow = true
